@@ -15,6 +15,25 @@ run  `python nls-dem-downloader.py config.json HSL ./data -orto -v`
 
 ##### create environment `conda env create -f orthoenv.yaml`
 
-### Run transform and tiling
+### Create and optimize tiles
 
-`bash translate.sh`
+Get gdal2tiles.py -fork supporting XYZ-tiling scheme. https://github.com/CjS77/gdal2tiles
+
+Create tiles (can take many days)
+
+`bash create_xyz_tiles.sh <forked_gdal2tiles.py_path <output_dir>`
+
+Get ImageMagick for optimizing and JPEG compression of tiles and run tiling script
+
+`sudo apt-get install imagemagick`
+
+Optimize tiles
+
+`bash optimize_tiles.sh <input_dir> <output_dir>`
+
+### Upload tiles to Blob Storage
+
+Get azcopy https://aka.ms/downloadazcopy-v10-linux
+https://github.com/Azure/azure-storage-azcopy
+
+`./azcopy cp /data/directory1 "https://myaccount.blob.core.windows.net/mycontainer/directory1?sastokenhere" --recursive=true`
