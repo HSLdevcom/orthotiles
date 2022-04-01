@@ -28,7 +28,7 @@ find "$input_dir" -type d -print0 | xargs -0 -I {} mkdir -p $output_dir"/{}"
 for f in $files
 do
     echo "$f"
-    convert -strip -sampling-factor 4:2:0 -define jpeg:dct-method=float -interlace Plane -quality 75% "$f" "$output_dir/${f/%.png/.jpg}"
+    convert -strip -sampling-factor 4:2:0 -define jpeg:dct-method=float -interlace Plane -quality 85% "$f" "$output_dir/${f/%.png/.jpg}"
 done
 echo "Done."
 exit 0
