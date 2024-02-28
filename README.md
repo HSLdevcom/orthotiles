@@ -35,15 +35,54 @@ If HSY imagery comes in ECW format, it cannot be converted on GDAL installed on 
 
 ## 3. Convert HSY imagery (local)
 
+### Option a, from .jp2
+
 You probably got images on an external hard disk drive. Get the proper image file and convert it with GDAL to JPEG-compressed GeoTIFF:
 ```cmd
-gdal_translate --config GDAL_CACHEMAX 16000 -co NUM_THREADS=ALL_CPUS -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -co TILED=YES -co BIGTIFF=YES -a_nodata 0 HSY_GK25.jp2 hsy-gk25.tif
+gdal_translate --config GDAL_CACHEMAX 16000 -co NUM_THREADS=ALL_CPUS -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -co TILED=YES -co BIGTIFF=YES -a_nodata 0 HSY_GK25.jp2 hsl-gk25.tif
 ```
 The first two parameters are just configurations for the runtime to make the processing a bit faster. Adjust them if needed. `--config GDAL_CACHEMAX 16000 -co NUM_THREADS=ALL_CPUS` means GDAL can use 16 GiB RAM and all cpus for a compression process.
 
 **Note! Pick up carefully the right data from HDD. Imagery to be deployed should have restriction areas blurred!**
 
-Upload the converted image to the server via Azure Storage (also handy if you want to preview it) or straight to the machine. The commands expected the image to be downloaded to `/data/hsy-gk25.tif`
+Upload the converted image to the server via Azure Storage (also handy if you want to preview it) or straight to the machine. The next instructions expect the image to be downloaded to `/data/hsl-gk25.tif`
+
+### Option b, from tif files
+
+If you're not able to open .jp2 file (due to the drivers or some other reason), you can process .tif-files, if the blurred ones are provided.
+
+First, copy the files in compressed format:
+```bash
+for i in /<path to tiff dir>/*.tif; do gdal_translate -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR $i $(basename $i); done;
+```
+
+There could be problems on geometric transformations. Overwrite the values with the provided Python script:
+```bash
+cd /<path to tif folder>/
+pip3 install rasterio tqdm
+python3 fix_transformation.py *.tif
+```
+
+Next, test that the vrt-file can be created.
+```bash
+gdalbuildvrt hsl.vrt /<path to tif folder>/*.tif
+```
+
+If there are any errors, they should be resolved at this point.
+
+Next, you could move files to Azure Storage and continue processing on a VM, or process the next step locally.
+
+Create a vrt file, if yet not exists.
+```bash
+gdalbuildvrt -a_srs EPSG:3879 hsl-gk25.vrt /<path to tif folder>/*.tif
+```
+
+Create a tif file from vrt.
+```bash
+gdal_translate --config GDAL_CACHEMAX 50% -co NUM_THREADS=ALL_CPUS -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -co JPEG_QUALITY=100 -co TILED=YES -co BIGTIFF=YES -a_nodata 0 hsl-gk25.vrt hsl-gk25.tif
+```
+
+If you processed the image locally, send the converted image to the server via Azure Storage (also handy if you want to preview it) or straight to the machine. The next instructions expect the image to be downloaded to `/data/hsl-gk25.tif`
 
 ## 4. Download imagery from MML
 
@@ -91,9 +130,9 @@ Now, let's make sure nodata is still assigned for HSY and after that combine the
 ```bash
 cd /data/
 
-gdal_edit.py -a_nodata 0 hsy-gk25.tif
+gdal_edit.py -a_nodata 0 hsl-gk25.tif
 
-gdalbuildvrt -resolution highest -allow_projection_difference image-gk25.vrt mml_orthophotos/mml-gk25.tif hsy-gk25.tif
+gdalbuildvrt -resolution highest -allow_projection_difference image-gk25.vrt mml_orthophotos/mml-gk25.tif hsl-gk25.tif
 ```
 
 ## 7. Transform the image to Web Mercator
