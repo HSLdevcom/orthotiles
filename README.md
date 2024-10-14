@@ -96,6 +96,8 @@ python3 nls-dem-downloader.py config.json HSL /data/2021/mml_orthophotos/raw -or
 
 ## 5. Convert MML imagery
 
+#### Option 1: MML Images in .JP2 format
+
 First, MML images should be converted to RGB GeoTIFFs (originally, some of them could be grayscaled!). This is a bit hacky way to recognize grayscaled image with `gdalinfo`, but should work:
 ```bash
 cd /data/mml_orthophotos/
@@ -112,6 +114,24 @@ do
 done;
 ```
 
+#### Option 2: MML Images in .TIF format
+If MML images come in RGB GeoTIFFs already, they should still be checked so they are compressed properly and contain the right color bands:
+```bash
+cd /data/mml_orthophotos/
+
+for i in raw/*.tif
+do
+  echo $i
+  if [ "$(gdalinfo $i | grep Gray)" ]
+    then
+      gdal_translate -b 1 -b 1 -b 1 -colorinterp red,green,blue -co COMPRESS=JPEG -co TILED=YES -co JPEG_QUALITY=85 $i unified/$(basename $i)
+    else
+      cp $i unified/$(basename $i)
+  fi;
+done;
+```
+
+#### After option 1
 After that, create a virtual raster mosaic and transform it to ETRS-GK25 coordinate reference system. (The same as HSY imagery is delivered.)
 ```bash
 gdalbuildvrt mml-tm35fin.vrt unified/*.jp2
@@ -120,6 +140,14 @@ gdalwarp -t_srs EPSG:3879 -r bilinear -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -c
 ```
 
 Remember, `--config GDAL_CACHEMAX <ram>  -co NUM_THREADS=<cpu count>` can be used!
+
+#### After option 2
+If the MML images already come as GeoTIFFs, then you can run the same commands but point the tools to the TIF files instead:
+```bash
+gdalbuildvrt mml-tm35fin.vrt path/to/tif_files/*.tif
+
+gdalwarp -t_srs EPSG:3879 -r bilinear -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -co TILED=YES -co BIGTIFF=YES -srcnodata "0 0 0" -dstnodata "0 0 0" mml-tm35fin.vrt mml-gk25.tif
+```
 
 
 ## 6. Combine HSY and MML imageries
@@ -142,10 +170,15 @@ Use `gdalwarp` to transform image to EPSG:3857 (the final projection). Although 
 ```bash
 cd /data/
 
-gdalwarp --config GDAL_CACHEMAX 4000 -co NUM_THREADS=ALL_CPUS -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -co JPEG_QUALITY=100 -co TILED=YES -co BIGTIFF=YES -t_srs EPSG:3857 -r bilinear -srcnodata 0 0 0 image-gk25.vrt image-final.tif
+gdalwarp --config GDAL_CACHEMAX 4000 -co NUM_THREADS=ALL_CPUS -co COMPRESS=JPEG -co PHOTOMETRIC=YCBCR -co JPEG_QUALITY=80 -co TILED=YES -co BIGTIFF=YES -t_srs EPSG:3857 -r bilinear -srcnodata "0 0 0" image-gk25.vrt image-final.tif
 ```
 
-*Optional: Upload the final image to Azure Storage or locally and inspect that everything looks fine at this point. It could be annoying to find some errors after two weeks of `gdal2tiles.py`-process.
+
+### Inspecting the results (Optional)
+
+Option 1: Upload the final image to Azure Storage or locally and inspect that everything looks fine at this point. It could be annoying to find some errors after two weeks of `gdal2tiles.py`-process.
+
+Option 2: If you're creating the images in a VM and want to verify that `gdalwarp` correctly you can download the image onto your local machine for example with `scp` to inspect it. In order to efficiently load and preview the image it needs overview images added to it. `gdaladdo {downloaded_file_name_here}` works well to generate the needed overview images. After using `gdaladdo` you can view the results in a tool like [QGIS](https://qgis.org/).
 
 ## 8. Create XYZ tiling
 
@@ -166,7 +199,7 @@ cd /data/
 mkdir final
 cd output/
 
-for z in {8...19}
+for z in $(seq 8 19);
 do 
   ~/orthotiles/optimize_tiles.sh $z/ /data/final/
 done
@@ -196,7 +229,7 @@ Run azcopy for folder by folder or all at once:
 ```bash
 cd /data/final/
 
-for z in {8...19}
+for z in $(seq 8 19);
 do
   azcopy copy --recursive z "https://{myaccount}.blob.core.windows.net/{mycontainer}?{my-sas-token}"
 done
