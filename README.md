@@ -231,7 +231,7 @@ cd /data/final/
 
 for z in $(seq 8 19);
 do
-  azcopy copy --recursive z "https://{myaccount}.blob.core.windows.net/{mycontainer}?{my-sas-token}"
+  azcopy copy --recursive $z "https://{myaccount}.blob.core.windows.net/{mycontainer}?{my-sas-token}"
 done
 ```
 
